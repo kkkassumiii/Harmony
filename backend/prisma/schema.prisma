@@ -1,0 +1,113 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-x64"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  username  String     @unique
+  password  String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  profile         Profile?
+  emotionEntries  EmotionEntry[]
+  emotions        Emotion[]
+  goals           Goal[]
+  habits          Habit[]
+
+  @@index([email])
+  @@index([username])
+}
+
+model Profile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName String?
+  lastName  String?
+  avatar    String?
+  bio       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Emotion {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  color          String   @default("#6366f1")
+  icon           String   @default("😐")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  emotionEntries EmotionEntry[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model EmotionEntry {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emotionId String
+  emotion   Emotion  @relation(fields: [emotionId], references: [id], onDelete: Cascade)
+  content   String
+  moodLevel Int      @default(5)
+  tags      String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([emotionId])
+  @@index([createdAt])
+}
+
+model Goal {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String   @default("")
+  category    String   @default("Personal")
+  startDate   DateTime
+  endDate     DateTime
+  completed   Boolean  @default(false)
+  progress    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([completed])
+  @@index([createdAt])
+}
+
+model Habit {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String   @default("")
+  frequency   String   @default("daily")
+  active      Boolean  @default(true)
+  streak      Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([active])
+  @@index([createdAt])
+}
