@@ -23,6 +23,13 @@ interface AuthState {
   user: User | null;
   profile: Profile | null;
   token: string | null;
+  twoFactorRequired: boolean;
+  twoFactorMethod: 'email' | 'sms' | null;
+  twoFactorDestination: string | null;
+  pendingUsername: string | null;
+  twoFactorEnabled: boolean;
+  registeredTwoFactorMethod: 'email' | 'sms' | null;
+  registeredTwoFactorDestination: string | null;
   loading: boolean;
   error: string | null;
 }
@@ -32,6 +39,13 @@ const initialState: AuthState = {
   user: null,
   profile: null,
   token: localStorage.getItem('authToken'),
+  twoFactorRequired: false,
+  twoFactorMethod: null,
+  twoFactorDestination: null,
+  pendingUsername: null,
+  twoFactorEnabled: false,
+  registeredTwoFactorMethod: null,
+  registeredTwoFactorDestination: null,
   loading: false,
   error: null,
 };
@@ -57,16 +71,37 @@ export const register = createAsyncThunk(
 export const login = createAsyncThunk(
   'auth/login',
   async (
-    { email, password }: { email: string; password: string },
+    { username, password }: { username: string; password: string },
     { rejectWithValue }
   ) => {
     try {
-      const response = await api.login(email, password);
+      const response = await api.login(username, password);
+      const { token, user, twoFactorRequired, method, destination } = response.data;
+      if (token) {
+        localStorage.setItem('authToken', token);
+      } else {
+        localStorage.removeItem('authToken');
+      }
+      return { token, user, twoFactorRequired, method, destination, username };
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.error || 'Login failed');
+    }
+  }
+);
+
+export const verifyTwoFactor = createAsyncThunk(
+  'auth/verifyTwoFactor',
+  async (
+    { username, code }: { username: string; code: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await api.verifyTwoFactor(username, code);
       const { token, user } = response.data;
       localStorage.setItem('authToken', token);
       return { token, user };
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.error || 'Login failed');
+      return rejectWithValue(error.response?.data?.error || 'Verification failed');
     }
   }
 );
@@ -79,6 +114,18 @@ export const getProfile = createAsyncThunk(
       return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.error || 'Failed to fetch profile');
+    }
+  }
+);
+
+export const getCurrentUser = createAsyncThunk(
+  'auth/getCurrentUser',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.getMe();
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.error || 'Failed to fetch current user');
     }
   }
 );
@@ -125,6 +172,9 @@ const authSlice = createSlice({
         state.isAuthenticated = true;
         state.user = action.payload.user;
         state.token = action.payload.token;
+        state.twoFactorEnabled = false;
+        state.registeredTwoFactorMethod = null;
+        state.registeredTwoFactorDestination = null;
       })
       .addCase(register.rejected, (state, action) => {
         state.loading = false;
@@ -136,14 +186,54 @@ const authSlice = createSlice({
       .addCase(login.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.twoFactorRequired = false;
+        state.twoFactorMethod = null;
+        state.twoFactorDestination = null;
+        state.pendingUsername = null;
       })
       .addCase(login.fulfilled, (state, action) => {
+        state.loading = false;
+        if (action.payload.twoFactorRequired) {
+          state.twoFactorRequired = true;
+          state.twoFactorMethod = action.payload.method;
+          state.twoFactorDestination = action.payload.destination;
+          state.pendingUsername = action.payload.username || null;
+          state.isAuthenticated = false;
+          state.token = null;
+        } else {
+          state.isAuthenticated = true;
+          state.user = action.payload.user;
+          state.token = action.payload.token;
+          state.twoFactorRequired = false;
+          state.twoFactorMethod = null;
+          state.twoFactorDestination = null;
+          state.pendingUsername = null;
+          state.twoFactorEnabled = false;
+          state.registeredTwoFactorMethod = null;
+          state.registeredTwoFactorDestination = null;
+        }
+      })
+      .addCase(login.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    builder
+      .addCase(verifyTwoFactor.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(verifyTwoFactor.fulfilled, (state, action) => {
         state.loading = false;
         state.isAuthenticated = true;
         state.user = action.payload.user;
         state.token = action.payload.token;
+        state.twoFactorRequired = false;
+        state.twoFactorMethod = null;
+        state.twoFactorDestination = null;
+        state.pendingUsername = null;
       })
-      .addCase(login.rejected, (state, action) => {
+      .addCase(verifyTwoFactor.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       });
@@ -161,6 +251,35 @@ const authSlice = createSlice({
       .addCase(getProfile.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      });
+
+    // Get Current User
+    builder
+      .addCase(getCurrentUser.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getCurrentUser.fulfilled, (state, action) => {
+        state.loading = false;
+        state.isAuthenticated = true;
+        state.user = {
+          id: action.payload.id,
+          email: action.payload.email,
+          username: action.payload.username,
+          createdAt: action.payload.createdAt,
+        };
+        state.twoFactorEnabled = action.payload.twoFactorEnabled;
+        state.registeredTwoFactorMethod = action.payload.twoFactorMethod || null;
+        state.registeredTwoFactorDestination = action.payload.twoFactorMethod === 'sms'
+          ? action.payload.twoFactorPhone
+          : action.payload.twoFactorEmail;
+      })
+      .addCase(getCurrentUser.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+        state.isAuthenticated = false;
+        state.token = null;
+        localStorage.removeItem('authToken');
       });
 
     // Update Profile

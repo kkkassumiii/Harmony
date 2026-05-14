@@ -1,6 +1,16 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import { apiCache, deduplicateRequest } from '../utils/performance';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
+// Cache configuration (TTL in milliseconds)
+const CACHE_CONFIG = {
+  EMOTIONS: 10 * 60 * 1000, // 10 minutes
+  GOALS: 10 * 60 * 1000, // 10 minutes
+  HABITS: 10 * 60 * 1000, // 10 minutes
+  PROFILE: 30 * 60 * 1000, // 30 minutes
+  ANALYTICS: 5 * 60 * 1000, // 5 minutes
+};
 
 class ApiClient {
   private client: AxiosInstance;
@@ -11,6 +21,7 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      timeout: 10000, // 10 second timeout
     });
 
     // Request interceptor to add JWT token
@@ -40,22 +51,65 @@ class ApiClient {
     );
   }
 
-  // Auth endpoints
+  // Helper method for cached GET requests
+  private async getCached<T>(url: string, cacheKey: string, ttl: number) {
+    // Check cache first
+    const cached = apiCache.get(cacheKey);
+    if (cached) {
+      return Promise.resolve({ data: cached });
+    }
+
+    // Deduplicate concurrent requests
+    return deduplicateRequest(cacheKey, async () => {
+      const response = await this.client.get<T>(url);
+      // Cache the response
+      apiCache.set(cacheKey, response.data, ttl);
+      return response;
+    });
+  }
+
+  // Invalidate cache
+  invalidateCache(pattern?: string) {
+    if (pattern) {
+      // Simple pattern matching - in production, use more sophisticated approach
+      apiCache.clear(pattern);
+    } else {
+      apiCache.clear();
+    }
+  }
+
+  // Auth endpoints (no caching for auth)
   async register(email: string, username: string, password: string) {
     return this.client.post('/auth/register', { email, username, password });
   }
 
-  async login(email: string, password: string) {
-    return this.client.post('/auth/login', { email, password });
+  async login(username: string, password: string) {
+    return this.client.post('/auth/login', { username, password });
   }
 
   async getMe() {
     return this.client.get('/auth/me');
   }
 
-  // Profile endpoints
+  async verifyTwoFactor(username: string, code: string) {
+    return this.client.post('/auth/2fa/verify', { username, code });
+  }
+
+  async setupTwoFactor(method: 'email' | 'sms', phone?: string) {
+    return this.client.post('/auth/2fa/setup', { method, phone });
+  }
+
+  async confirmTwoFactor(code: string) {
+    return this.client.post('/auth/2fa/confirm', { code });
+  }
+
+  async disableTwoFactor() {
+    return this.client.post('/auth/2fa/disable');
+  }
+
+  // Profile endpoints (cached)
   async getProfile() {
-    return this.client.get('/profile');
+    return this.getCached('/profile', 'profile', CACHE_CONFIG.PROFILE);
   }
 
   async updateProfile(data: {
@@ -64,12 +118,14 @@ class ApiClient {
     avatar?: string;
     bio?: string;
   }) {
-    return this.client.put('/profile', data);
+    const result = this.client.put('/profile', data);
+    this.invalidateCache('profile');
+    return result;
   }
 
-  // Emotions endpoints
+  // Emotions endpoints (cached)
   async getEmotions() {
-    return this.client.get('/emotions');
+    return this.getCached('/emotions', 'emotions', CACHE_CONFIG.EMOTIONS);
   }
 
   async createEmotion(data: {
@@ -77,18 +133,24 @@ class ApiClient {
     color: string;
     icon: string;
   }) {
-    return this.client.post('/emotions', data);
+    const result = this.client.post('/emotions', data);
+    this.invalidateCache('emotions');
+    return result;
   }
 
   async updateEmotion(id: string, data: any) {
-    return this.client.put(`/emotions/${id}`, data);
+    const result = this.client.put(`/emotions/${id}`, data);
+    this.invalidateCache('emotions');
+    return result;
   }
 
   async deleteEmotion(id: string) {
-    return this.client.delete(`/emotions/${id}`);
+    const result = this.client.delete(`/emotions/${id}`);
+    this.invalidateCache('emotions');
+    return result;
   }
 
-  // Emotion Entries endpoints
+  // Emotion Entries endpoints (no caching due to frequent updates)
   async getEmotionEntries(skip: number = 0, take: number = 20) {
     return this.client.get('/emotion-entries', {
       params: { skip, take },
@@ -101,7 +163,9 @@ class ApiClient {
     moodLevel: number;
     tags?: string;
   }) {
-    return this.client.post('/emotion-entries', data);
+    const result = this.client.post('/emotion-entries', data);
+    this.invalidateCache('analytics');
+    return result;
   }
 
   async getEmotionEntry(id: string) {
@@ -109,16 +173,29 @@ class ApiClient {
   }
 
   async updateEmotionEntry(id: string, data: any) {
-    return this.client.put(`/emotion-entries/${id}`, data);
+    const result = this.client.put(`/emotion-entries/${id}`, data);
+    this.invalidateCache('analytics');
+    return result;
   }
 
   async deleteEmotionEntry(id: string) {
-    return this.client.delete(`/emotion-entries/${id}`);
+    const result = this.client.delete(`/emotion-entries/${id}`);
+    this.invalidateCache('analytics');
+    return result;
   }
 
-  // Goals endpoints
+  // Analytics endpoints (cached)
+  async getAnalytics() {
+    return this.getCached('/analytics', 'analytics', CACHE_CONFIG.ANALYTICS);
+  }
+
+  async getRecommendations() {
+    return this.getCached('/analytics/recommendations', 'recommendations', CACHE_CONFIG.ANALYTICS);
+  }
+
+  // Goals endpoints (cached)
   async getGoals() {
-    return this.client.get('/goals');
+    return this.getCached('/goals', 'goals', CACHE_CONFIG.GOALS);
   }
 
   async createGoal(data: {
@@ -128,7 +205,10 @@ class ApiClient {
     startDate: string;
     endDate: string;
   }) {
-    return this.client.post('/goals', data);
+    const result = this.client.post('/goals', data);
+    this.invalidateCache('goals');
+    this.invalidateCache('analytics');
+    return result;
   }
 
   async getGoal(id: string) {
@@ -136,16 +216,22 @@ class ApiClient {
   }
 
   async updateGoal(id: string, data: any) {
-    return this.client.put(`/goals/${id}`, data);
+    const result = this.client.put(`/goals/${id}`, data);
+    this.invalidateCache('goals');
+    this.invalidateCache('analytics');
+    return result;
   }
 
   async deleteGoal(id: string) {
-    return this.client.delete(`/goals/${id}`);
+    const result = this.client.delete(`/goals/${id}`);
+    this.invalidateCache('goals');
+    this.invalidateCache('analytics');
+    return result;
   }
 
-  // Habits endpoints
+  // Habits endpoints (cached)
   async getHabits() {
-    return this.client.get('/habits');
+    return this.getCached('/habits', 'habits', CACHE_CONFIG.HABITS);
   }
 
   async createHabit(data: {
@@ -153,7 +239,10 @@ class ApiClient {
     description?: string;
     frequency: 'daily' | 'weekly' | 'monthly';
   }) {
-    return this.client.post('/habits', data);
+    const result = this.client.post('/habits', data);
+    this.invalidateCache('habits');
+    this.invalidateCache('analytics');
+    return result;
   }
 
   async getHabit(id: string) {
@@ -161,12 +250,20 @@ class ApiClient {
   }
 
   async updateHabit(id: string, data: any) {
-    return this.client.put(`/habits/${id}`, data);
+    const result = this.client.put(`/habits/${id}`, data);
+    this.invalidateCache('habits');
+    this.invalidateCache('analytics');
+    return result;
   }
 
   async deleteHabit(id: string) {
-    return this.client.delete(`/habits/${id}`);
+    const result = this.client.delete(`/habits/${id}`);
+    this.invalidateCache('habits');
+    this.invalidateCache('analytics');
+    return result;
   }
 }
 
-export default new ApiClient();
+const apiClient = new ApiClient();
+
+export default apiClient;

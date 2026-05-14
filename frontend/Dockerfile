@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:18-bullseye-slim
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ COPY . .
 EXPOSE 3000
 
 # Set environment variables for development
-ENV REACT_APP_API_URL=http://backend:8000/api
+ENV REACT_APP_API_URL=http://localhost:8000/api
 ENV REACT_APP_APP_NAME="Гармония с собой"
 
 # Start development server

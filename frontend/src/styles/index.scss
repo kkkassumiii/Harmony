@@ -24,9 +24,20 @@ button {
 a {
   text-decoration: none;
   color: #6366f1;
+  transition: color 0.2s ease;
 
   &:hover {
     color: #4f46e5;
+  }
+}
+
+// Dark theme link styles
+html[data-bs-theme='dark'] a,
+body[data-bs-theme='dark'] a {
+  color: #c7d2fe;
+
+  &:hover {
+    color: #a5b4fc;
   }
 }
 
@@ -46,6 +57,21 @@ a {
 
   &:hover {
     background: #94a3b8;
+  }
+}
+
+// Dark theme scrollbar
+html[data-bs-theme='dark'] ::-webkit-scrollbar-track,
+body[data-bs-theme='dark'] ::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+html[data-bs-theme='dark'] ::-webkit-scrollbar-thumb,
+body[data-bs-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+
+  &:hover {
+    background: #6b7280;
   }
 }
 
@@ -73,6 +99,10 @@ a {
 
 .text-success {
   color: #10b981;
+}
+
+.text-muted {
+  transition: color 0.2s ease;
 }
 
 .mt-4 {

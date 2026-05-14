@@ -13,6 +13,7 @@ import emotionEntriesRoutes from './routes/emotionEntries';
 import goalsRoutes from './routes/goals';
 import habitsRoutes from './routes/habits';
 import profileRoutes from './routes/profile';
+import analyticsRoutes from './routes/analytics';
 
 dotenv.config();
 
@@ -51,11 +52,35 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 // Middleware
-app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-  credentials: true,
-}));
+// CORS middleware for all requests - MUST be first before helmet
+app.use((req, res, next) => {
+  console.log('=== CORS Middleware ===');
+  console.log('Request Origin header:', req.headers.origin);
+  console.log('Method:', req.method);
+  
+  const origin = req.headers.origin;
+  if (origin === 'http://localhost:3000') {
+    res.set('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.set('Access-Control-Allow-Credentials', 'true');
+    console.log('✓ Set CORS to http://localhost:3000');
+  } else {
+    console.log('Origin does not match http://localhost:3000, origin is:', origin);
+  }
+  
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.status(200).end();
+  }
+  
+  next();
+});
+
+// app.use(helmet({
+//   crossOriginResourcePolicy: false,
+//   crossOriginEmbedderPolicy: false,
+// }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -74,6 +99,18 @@ app.use('/api/emotion-entries', emotionEntriesRoutes);
 app.use('/api/goals', goalsRoutes);
 app.use('/api/habits', habitsRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/analytics', analyticsRoutes);
+
+// Final CORS override middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin === 'http://localhost:3000') {
+    res.set('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.set('Access-Control-Allow-Credentials', 'true');
+    console.log('Final CORS override set for localhost:3000');
+  }
+  next();
+});
 
 // 404 handler
 app.use((req: Request, res: Response) => {
@@ -86,6 +123,18 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   res.status(err.status || 500).json({ 
     error: err.message || 'Internal server error' 
   });
+});
+
+// Final CORS override middleware - after all routes and error handler
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  console.log('Final CORS middleware - Origin:', origin, 'Current header:', res.get('Access-Control-Allow-Origin'));
+  if (origin === 'http://localhost:3000') {
+    res.set('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.set('Access-Control-Allow-Credentials', 'true');
+    console.log('Final CORS override set for localhost:3000');
+  }
+  next();
 });
 
 // Start server

@@ -1,13 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { updateProfile } from '../store/authSlice';
+import { getCurrentUser, updateProfile } from '../store/authSlice';
+import { validators } from '../utils/validation';
+import api from '../services/api';
 
 const Profile: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { profile, user, loading, error } = useAppSelector((state) => state.auth);
+  const { profile, user, loading, error, twoFactorEnabled, registeredTwoFactorMethod, registeredTwoFactorDestination } = useAppSelector((state) => state.auth);
   const [editMode, setEditMode] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [twoFactorPhone, setTwoFactorPhone] = useState('');
+  const [twoFactorMethodSelection, setTwoFactorMethodSelection] = useState<'email' | 'sms'>('email');
+  const [setupPending, setSetupPending] = useState(false);
+  const [setupMessage, setSetupMessage] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [twoFactorError, setTwoFactorError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [isConfirming, setIsConfirming] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -25,6 +35,65 @@ const Profile: React.FC = () => {
       });
     }
   }, [profile]);
+
+  const handleSendTwoFactorCode = async (method: 'email' | 'sms') => {
+    setTwoFactorError('');
+    setPhoneError('');
+    setSetupMessage('');
+    setSetupPending(true);
+
+    if (method === 'sms') {
+      const phoneValidationError = validators.phone(twoFactorPhone);
+      if (phoneValidationError) {
+        setPhoneError(phoneValidationError);
+        setSetupPending(false);
+        return;
+      }
+    }
+
+    try {
+      const response = await api.setupTwoFactor(method, method === 'sms' ? twoFactorPhone : undefined);
+      setSetupMessage(`Код отправлен на ${response.data.destination}`);
+      setTwoFactorMethodSelection(method);
+    } catch (error: any) {
+      setTwoFactorError(error.response?.data?.error || 'Не удалось отправить код');
+    } finally {
+      setSetupPending(false);
+    }
+  };
+
+  const handleConfirmTwoFactor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTwoFactorError('');
+    setIsConfirming(true);
+
+    try {
+      await api.confirmTwoFactor(verificationCode);
+      setSuccessMessage('Двухфакторная аутентификация включена');
+      setVerificationCode('');
+      setSetupMessage('');
+      dispatch(getCurrentUser());
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (error: any) {
+      setTwoFactorError(error.response?.data?.error || 'Не удалось подтвердить код');
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  const handleDisableTwoFactor = async () => {
+    setTwoFactorError('');
+    try {
+      await api.disableTwoFactor();
+      setSuccessMessage('Двухфакторная аутентификация отключена');
+      setSetupMessage('');
+      setVerificationCode('');
+      dispatch(getCurrentUser());
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (error: any) {
+      setTwoFactorError(error.response?.data?.error || 'Не удалось отключить 2FA');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -188,6 +257,104 @@ const Profile: React.FC = () => {
                 <h6>Статус</h6>
                 <span className="badge bg-success">Активный</span>
               </div>
+            </Card.Body>
+          </Card>
+
+          <Card className="mt-4">
+            <Card.Header className="bg-warning text-dark">
+              Безопасность и 2FA
+            </Card.Header>
+            <Card.Body>
+              {successMessage && <Alert variant="success">{successMessage}</Alert>}
+              {twoFactorError && <Alert variant="danger">{twoFactorError}</Alert>}
+              <div className="mb-3">
+                <h6>Статус двухфакторной аутентификации</h6>
+                <p>
+                  {twoFactorEnabled ? (
+                    <span className="badge bg-success">Включено</span>
+                  ) : (
+                    <span className="badge bg-secondary">Отключено</span>
+                  )}
+                </p>
+                {twoFactorEnabled && registeredTwoFactorMethod && (
+                  <p className="text-muted">
+                    Метод: {registeredTwoFactorMethod.toUpperCase()} {registeredTwoFactorDestination ? `— ${registeredTwoFactorDestination}` : ''}
+                  </p>
+                )}
+              </div>
+
+              {!setupPending ? (
+                <div>
+                  <div className="mb-3">
+                    <Form.Label>Метод подтверждения</Form.Label>
+                    <Form.Select
+                      value={twoFactorMethodSelection}
+                      onChange={(e) => setTwoFactorMethodSelection(e.target.value as 'email' | 'sms')}
+                    >
+                      <option value="email">Email ({user?.email})</option>
+                      <option value="sms">SMS</option>
+                    </Form.Select>
+                  </div>
+
+                  {twoFactorMethodSelection === 'sms' && (
+                    <Form.Group className="mb-3">
+                      <Form.Label>Телефон</Form.Label>
+                      <Form.Control
+                        type="tel"
+                        value={twoFactorPhone}
+                        onChange={(e) => {
+                          setTwoFactorPhone(e.target.value);
+                          setPhoneError('');
+                        }}
+                        isInvalid={!!phoneError}
+                        placeholder="+71234567890"
+                      />
+                      {phoneError && <Form.Control.Feedback type="invalid">{phoneError}</Form.Control.Feedback>}
+                    </Form.Group>
+                  )}
+
+                  <div className="d-flex gap-2 flex-column">
+                    <Button
+                      variant="primary"
+                      onClick={() => handleSendTwoFactorCode(twoFactorMethodSelection)}
+                      disabled={setupPending || (twoFactorMethodSelection === 'sms' && (!twoFactorPhone || !!phoneError))}
+                    >
+                      {setupPending ? 'Отправка кода...' : 'Включить 2FA'}
+                    </Button>
+                    <Button
+                      variant="outline-danger"
+                      onClick={handleDisableTwoFactor}
+                      disabled={setupPending}
+                    >
+                      Отключить 2FA
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              {setupMessage && (
+                <Alert variant="info" className="mt-3">
+                  ✅ {setupMessage}
+                </Alert>
+              )}
+
+              {setupMessage && (
+                <Form onSubmit={handleConfirmTwoFactor} className="mt-3">
+                  <Form.Group className="mb-3">
+                    <Form.Label>Код из сообщения</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={verificationCode}
+                      onChange={(e) => setVerificationCode(e.target.value)}
+                      placeholder="Введите 6-значный код"
+                      maxLength={6}
+                    />
+                  </Form.Group>
+                  <Button type="submit" variant="success" disabled={isConfirming || verificationCode.trim().length !== 6}>
+                    {isConfirming ? 'Подтверждение...' : 'Подтвердить код'}
+                  </Button>
+                </Form>
+              )}
             </Card.Body>
           </Card>
 

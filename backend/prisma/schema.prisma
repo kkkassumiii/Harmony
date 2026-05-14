@@ -3,7 +3,6 @@
 
 generator client {
   provider = "prisma-client-js"
-  binaryTargets = ["native", "linux-x64"]
 }
 
 datasource db {
@@ -111,3 +110,22 @@ model Habit {
   @@index([active])
   @@index([createdAt])
 }
+
+// 2FA Support - Commented out for now
+// model TwoFactorCode {
+//   id          String   @id @default(uuid())
+//   userId      String
+//   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+//   method      String   // email or sms
+//   code        String   // 6-digit code
+//   destination String   // email or phone number
+//   attempts    Int      @default(0)
+//   maxAttempts Int      @default(3)
+//   isUsed      Boolean  @default(false)
+//   expiresAt   DateTime
+//   createdAt   DateTime @default(now())
+//
+//   @@index([userId])
+//   @@index([code])
+//   @@index([expiresAt])
+// }

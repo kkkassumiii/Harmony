@@ -22,23 +22,43 @@ const router = Router();
  *             properties:
  *               email:
  *                 type: string
+ *                 example: user@example.com
  *               username:
  *                 type: string
+ *                 example: john_doe
  *               password:
  *                 type: string
+ *                 example: SecurePass123
  *     responses:
  *       201:
  *         description: Пользователь успешно создан
+ *       400:
+ *         description: Ошибка валидации или пользователь уже существует
+ *       500:
+ *         description: Ошибка сервера
  */
 router.post('/register', 
-  body('email').isEmail().normalizeEmail(),
-  body('username').isLength({ min: 3 }).trim(),
-  body('password').isLength({ min: 6 }),
+  body('email')
+    .isEmail()
+    .withMessage('Некорректный формат email')
+    .normalizeEmail(),
+  body('username')
+    .trim()
+    .isLength({ min: 3, max: 50 })
+    .withMessage('Имя пользователя должно содержать 3-50 символов')
+    .matches(/^[a-zA-Z0-9_-]+$/)
+    .withMessage('Имя пользователя может содержать только буквы, цифры, - и _'),
+  body('password')
+    .isLength({ min: 6 })
+    .withMessage('Пароль должен содержать минимум 6 символов'),
   async (req, res: Response) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        return res.status(400).json({ 
+          error: errors.array()[0].msg,
+          details: errors.array()
+        });
       }
 
       const { email, username, password } = req.body;
@@ -51,7 +71,8 @@ router.post('/register',
       });
 
       if (existingUser) {
-        return res.status(400).json({ error: 'User already exists' });
+        const field = existingUser.email === email ? 'Email' : 'Имя пользователя';
+        return res.status(400).json({ error: `${field} уже используется` });
       }
 
       // Hash password
@@ -72,13 +93,17 @@ router.post('/register',
       const token = generateToken(user.id);
 
       res.status(201).json({
-        message: 'User created successfully',
-        user: { id: user.id, email: user.email, username: user.username },
+        message: 'Пользователь успешно создан',
+        user: { 
+          id: user.id, 
+          email: user.email, 
+          username: user.username 
+        },
         token,
       });
     } catch (error) {
       console.error('Register error:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Ошибка при регистрации. Пожалуйста, попробуйте позже' });
     }
   }
 );
@@ -104,15 +129,25 @@ router.post('/register',
  *     responses:
  *       200:
  *         description: Успешный вход
+ *       401:
+ *         description: Неверные учетные данные
  */
 router.post('/login',
-  body('username').trim(),
-  body('password'),
+  body('username')
+    .trim()
+    .notEmpty()
+    .withMessage('Имя пользователя обязательно'),
+  body('password')
+    .notEmpty()
+    .withMessage('Пароль обязателен'),
   async (req, res: Response) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        return res.status(400).json({ 
+          error: errors.array()[0].msg,
+          details: errors.array()
+        });
       }
 
       const { username, password } = req.body;
@@ -122,24 +157,28 @@ router.post('/login',
       });
 
       if (!user) {
-        return res.status(401).json({ error: 'Invalid credentials' });
+        return res.status(401).json({ error: 'Неверные учетные данные' });
       }
 
       const isPasswordValid = await comparePassword(password, user.password);
       if (!isPasswordValid) {
-        return res.status(401).json({ error: 'Invalid credentials' });
+        return res.status(401).json({ error: 'Неверные учетные данные' });
       }
 
       const token = generateToken(user.id);
 
       res.json({
-        message: 'Login successful',
-        user: { id: user.id, email: user.email, username: user.username },
+        message: 'Успешный вход',
+        user: { 
+          id: user.id, 
+          email: user.email, 
+          username: user.username 
+        },
         token,
       });
     } catch (error) {
       console.error('Login error:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Ошибка при входе. Пожалуйста, попробуйте позже' });
     }
   }
 );

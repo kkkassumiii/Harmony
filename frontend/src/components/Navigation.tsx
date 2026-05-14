@@ -33,6 +33,9 @@ const Navigation: React.FC = () => {
             <Nav.Link as={Link} to="/" className="nav-link">
               Главная
             </Nav.Link>
+            <Nav.Link as={Link} to="/analytics" className="nav-link">
+              Аналитика
+            </Nav.Link>
             <Nav.Link as={Link} to="/diary" className="nav-link">
               Дневник
             </Nav.Link>

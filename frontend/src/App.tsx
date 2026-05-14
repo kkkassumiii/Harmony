@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from './store/hooks';
-import { getProfile } from './store/authSlice';
+import { getCurrentUser, getProfile } from './store/authSlice';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -9,6 +9,8 @@ import EmotionDiary from './pages/EmotionDiary';
 import Goals from './pages/Goals';
 import Habits from './pages/Habits';
 import Profile from './pages/Profile';
+import Analytics from './pages/Analytics';
+import TwoFactor from './pages/TwoFactor';
 import Navigation from './components/Navigation';
 import './styles/App.scss';
 
@@ -23,13 +25,15 @@ function App() {
   const { theme } = useAppSelector((state) => state.theme);
 
   useEffect(() => {
-    if (token && isAuthenticated) {
+    if (token) {
+      dispatch(getCurrentUser());
       dispatch(getProfile());
     }
-  }, [dispatch, token, isAuthenticated]);
+  }, [dispatch, token]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-bs-theme', theme);
+    document.body.setAttribute('data-bs-theme', theme);
   }, [theme]);
 
   return (
@@ -38,6 +42,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/2fa" element={<TwoFactor />} />
         <Route
           path="/"
           element={
@@ -75,6 +80,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics"
+          element={
+            <ProtectedRoute>
+              <Analytics />
             </ProtectedRoute>
           }
         />

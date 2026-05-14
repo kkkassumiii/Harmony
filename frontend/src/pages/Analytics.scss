@@ -1,0 +1,175 @@
+.analytics-container {
+  background-color: inherit;
+  color: inherit;
+
+  h1 {
+    color: inherit;
+    margin-bottom: 2rem;
+    font-weight: 600;
+  }
+
+  .stat-card {
+    border: none;
+    border-radius: 0.75rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    height: 100%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+
+    &:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .stat-number {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #6366f1;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-label {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: inherit;
+      margin-bottom: 0.25rem;
+    }
+
+    .stat-subtext {
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+  }
+
+  .chart-card {
+    border: none;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    height: 100%;
+    transition: all 0.3s ease;
+
+    &:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .card-header {
+      background-color: transparent;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 1.5rem;
+
+      .card-title {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: inherit;
+      }
+    }
+
+    .card-body {
+      padding: 1.5rem;
+    }
+  }
+
+  .emotions-table {
+    overflow-x: auto;
+
+    table {
+      margin: 0;
+
+      thead {
+        tr {
+          border-bottom: 2px solid #e2e8f0;
+
+          th {
+            padding: 1rem;
+            font-weight: 600;
+            color: inherit;
+            background-color: transparent;
+          }
+        }
+      }
+
+      tbody {
+        tr {
+          border-bottom: 1px solid #e2e8f0;
+          transition: background-color 0.2s ease;
+
+          &:hover {
+            background-color: #f8fafc;
+          }
+
+          td {
+            padding: 1rem;
+            color: inherit;
+          }
+        }
+      }
+    }
+  }
+
+  // Dark theme adjustments
+  :global([data-bs-theme='dark']) & {
+    .stat-card {
+      background-color: #111827;
+      border-color: #334155;
+
+      &:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    .chart-card {
+      background-color: #111827;
+      border-color: #334155;
+
+      .card-header {
+        border-bottom-color: #334155;
+      }
+
+      &:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    .emotions-table {
+      table {
+        thead {
+          tr {
+            border-bottom-color: #334155;
+          }
+        }
+
+        tbody {
+          tr {
+            border-bottom-color: #334155;
+
+            &:hover {
+              background-color: #1f2937;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Responsive
+  @media (max-width: 768px) {
+    h1 {
+      font-size: 1.5rem;
+    }
+
+    .stat-card {
+      .stat-number {
+        font-size: 2rem;
+      }
+
+      .stat-label {
+        font-size: 0.9rem;
+      }
+    }
+
+    .chart-card {
+      margin-bottom: 1.5rem;
+    }
+  }
+}
